@@ -70,6 +70,12 @@
           </div>
 
           <div class="field full">
+            <label for="compileToken">Compile Token</label>
+            <input id="compileToken" name="compileToken" type="password" placeholder="填写后端 COMPILE_TOKEN" />
+            <div class="hint">后端开启 COMPILE_TOKEN 时必填，会以请求头 <code>x-compile-token</code> 发送。</div>
+          </div>
+
+          <div class="field full">
             <label for="pdfs">PDF 文件（可多选）</label>
             <input id="pdfs" name="pdfs" type="file" accept="application/pdf" multiple required />
           </div>
@@ -112,6 +118,7 @@
       const statusBox = document.getElementById("status");
       const submitBtn = document.getElementById("submitBtn");
       const apiBaseInput = document.getElementById("apiBase");
+      const tokenInput = document.getElementById("compileToken");
 
       function parseFilenameFromDisposition(disposition) {
         if (!disposition) return "skills.zip";
@@ -123,6 +130,24 @@
         return (apiBaseInput.value || "").trim().replace(/\/$/, "");
       }
 
+      function getCompileToken() {
+        return (tokenInput.value || "").trim();
+      }
+
+      function loadSavedConfig() {
+        const savedApiBase = window.localStorage.getItem("pdf2skill.apiBase") || "";
+        const savedToken = window.localStorage.getItem("pdf2skill.compileToken") || "";
+        if (savedApiBase) apiBaseInput.value = savedApiBase;
+        if (savedToken) tokenInput.value = savedToken;
+      }
+
+      function saveConfig() {
+        window.localStorage.setItem("pdf2skill.apiBase", getApiBase());
+        window.localStorage.setItem("pdf2skill.compileToken", getCompileToken());
+      }
+
+      loadSavedConfig();
+
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
         const files = document.getElementById("pdfs").files;
@@ -133,14 +158,23 @@
 
         const fd = new FormData(form);
         fd.delete("apiBase");
+        fd.delete("compileToken");
 
         submitBtn.disabled = true;
         statusBox.textContent = "编译中，请稍候...";
 
         try {
           const apiBase = getApiBase();
+          const compileToken = getCompileToken();
+          saveConfig();
+
           const url = `${apiBase}/api/compile`;
-          const resp = await fetch(url, { method: "POST", body: fd });
+          const headers = {};
+          if (compileToken) {
+            headers["x-compile-token"] = compileToken;
+          }
+
+          const resp = await fetch(url, { method: "POST", headers, body: fd });
 
           if (!resp.ok) {
             let errText = "编译失败";
@@ -148,6 +182,9 @@
               const data = await resp.json();
               if (data && data.error) errText = data.error;
             } catch (_) {}
+            if (resp.status === 401) {
+              errText = "鉴权失败：请检查 Compile Token 是否正确。";
+            }
             throw new Error(errText);
           }
 
