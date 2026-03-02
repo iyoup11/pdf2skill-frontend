@@ -95,6 +95,24 @@
           </div>
 
           <div class="field">
+            <label for="outputMode">输出模式</label>
+            <select id="outputMode" name="outputMode">
+              <option value="skills" selected>skills.zip</option>
+              <option value="game">game.json</option>
+              <option value="app">app.zip（可直接打开）</option>
+            </select>
+          </div>
+
+          <div class="field" id="appTemplateWrap" style="display:none;">
+            <label for="appTemplate">APP 模板</label>
+            <select id="appTemplate" name="appTemplate">
+              <option value="auto" selected>auto（默认侦探）</option>
+              <option value="detective">detective（推理互动）</option>
+              <option value="analyzer">analyzer（分析面板）</option>
+            </select>
+          </div>
+
+          <div class="field">
             <label for="maxChunks">max-chunks</label>
             <input id="maxChunks" name="maxChunks" type="number" value="24" min="4" max="200" />
           </div>
@@ -119,6 +137,9 @@
       const submitBtn = document.getElementById("submitBtn");
       const apiBaseInput = document.getElementById("apiBase");
       const tokenInput = document.getElementById("compileToken");
+      const outputModeInput = document.getElementById("outputMode");
+      const appTemplateInput = document.getElementById("appTemplate");
+      const appTemplateWrap = document.getElementById("appTemplateWrap");
 
       function parseFilenameFromDisposition(disposition) {
         if (!disposition) return "skills.zip";
@@ -144,9 +165,34 @@
       function saveConfig() {
         window.localStorage.setItem("pdf2skill.apiBase", getApiBase());
         window.localStorage.setItem("pdf2skill.compileToken", getCompileToken());
+        window.localStorage.setItem("pdf2skill.outputMode", String(outputModeInput.value || "skills"));
+        window.localStorage.setItem("pdf2skill.appTemplate", String(appTemplateInput.value || "auto"));
       }
 
       loadSavedConfig();
+
+      const savedMode = window.localStorage.getItem("pdf2skill.outputMode");
+      if (savedMode === "game" || savedMode === "skills" || savedMode === "app") {
+        outputModeInput.value = savedMode;
+      }
+
+      const savedTemplate = window.localStorage.getItem("pdf2skill.appTemplate");
+      if (savedTemplate === "auto" || savedTemplate === "detective" || savedTemplate === "analyzer") {
+        appTemplateInput.value = savedTemplate;
+      }
+
+      function refreshButtonText() {
+        const mode = outputModeInput.value;
+        appTemplateWrap.style.display = mode === "app" ? "block" : "none";
+        submitBtn.textContent = mode === "game"
+          ? "开始生成并下载 GAME JSON"
+          : mode === "app"
+            ? "开始生成并下载 APP ZIP"
+            : "开始编译并下载 ZIP";
+      }
+
+      refreshButtonText();
+      outputModeInput.addEventListener("change", refreshButtonText);
 
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
@@ -166,6 +212,10 @@
         try {
           const apiBase = getApiBase();
           const compileToken = getCompileToken();
+          const outputMode = String(outputModeInput.value || "skills");
+          const appTemplate = String(appTemplateInput.value || "auto");
+          fd.set("outputMode", outputMode);
+          fd.set("appTemplate", appTemplate);
           saveConfig();
 
           const url = `${apiBase}/api/compile`;
@@ -198,7 +248,11 @@
           a.click();
           a.remove();
           URL.revokeObjectURL(dlUrl);
-          statusBox.textContent = "编译成功，ZIP 已开始下载。";
+          statusBox.textContent = outputMode === "game"
+            ? "生成成功，GAME JSON 已开始下载。"
+            : outputMode === "app"
+              ? "生成成功，APP ZIP 已开始下载。"
+              : "编译成功，ZIP 已开始下载。";
         } catch (err) {
           statusBox.textContent = `编译失败: ${err.message}`;
         } finally {
