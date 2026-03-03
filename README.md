@@ -7,6 +7,7 @@ Standalone frontend repository for `pdf2skill` web UI.
 - Pure frontend page (`index.html`)
 - No backend code
 - Calls backend compile endpoint: `POST /api/compile`
+- Supports `outputMode=skills|game|app|wechat`
 
 ## Local run
 
@@ -28,3 +29,5 @@ Then open the page and set `API Base URL` to your backend domain.
 4. Output directory: `.`
 
 If your API is on another domain, configure CORS on backend.
+
+Environment template: `.env.vercel.example`

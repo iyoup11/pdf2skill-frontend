@@ -60,7 +60,7 @@
     <div class="wrap">
       <div class="card">
         <h1>pdf2skill Frontend</h1>
-        <p>独立前端仓库：上传 PDF，调用后端 API 编译 skills.zip。</p>
+        <p>独立前端仓库：上传 PDF，调用后端 API 生成 skills/game/app，或创建微信公众号草稿。</p>
 
         <form id="compileForm" class="grid">
           <div class="field full">
@@ -100,6 +100,7 @@
               <option value="skills" selected>skills.zip</option>
               <option value="game">game.json</option>
               <option value="app">app.zip（可直接打开）</option>
+              <option value="wechat">wechat（草稿/发布）</option>
             </select>
           </div>
 
@@ -110,6 +111,33 @@
               <option value="detective">detective（推理互动）</option>
               <option value="analyzer">analyzer（分析面板）</option>
             </select>
+          </div>
+
+          <div class="field full" id="wechatWrap" style="display:none; border:1px dashed var(--border); border-radius: 12px; padding: 12px;">
+            <label for="wechatTitle">微信公众号（可选覆盖）</label>
+            <input id="wechatTitle" name="wechatTitle" placeholder="留空则使用 Skill 名称" />
+            <div class="grid" style="margin-top:8px;">
+              <div class="field">
+                <label for="wechatAuthor">作者</label>
+                <input id="wechatAuthor" name="wechatAuthor" placeholder="例如：pdf2skill" />
+              </div>
+              <div class="field">
+                <label for="wechatSourceUrl">原文链接</label>
+                <input id="wechatSourceUrl" name="wechatSourceUrl" placeholder="https://example.com/source" />
+              </div>
+            </div>
+            <div class="field" style="margin-top:8px;">
+              <label for="wechatDigest">摘要（120字内，留空自动截取）</label>
+              <input id="wechatDigest" name="wechatDigest" maxlength="120" />
+            </div>
+            <div class="field" style="margin-top:8px;">
+              <label for="wechatAutoPublish">自动发布（提交到发布队列）</label>
+              <select id="wechatAutoPublish" name="wechatAutoPublish">
+                <option value="false" selected>false（仅创建草稿）</option>
+                <option value="true">true（创建后立即提交发布）</option>
+              </select>
+            </div>
+            <div class="hint">后端需配置：<code>WECHAT_APPID</code> / <code>WECHAT_SECRET</code> / <code>WECHAT_THUMB_MEDIA_ID</code>。</div>
           </div>
 
           <div class="field">
@@ -140,6 +168,7 @@
       const outputModeInput = document.getElementById("outputMode");
       const appTemplateInput = document.getElementById("appTemplate");
       const appTemplateWrap = document.getElementById("appTemplateWrap");
+      const wechatWrap = document.getElementById("wechatWrap");
 
       function parseFilenameFromDisposition(disposition) {
         if (!disposition) return "skills.zip";
@@ -172,7 +201,7 @@
       loadSavedConfig();
 
       const savedMode = window.localStorage.getItem("pdf2skill.outputMode");
-      if (savedMode === "game" || savedMode === "skills" || savedMode === "app") {
+      if (savedMode === "game" || savedMode === "skills" || savedMode === "app" || savedMode === "wechat") {
         outputModeInput.value = savedMode;
       }
 
@@ -184,11 +213,14 @@
       function refreshButtonText() {
         const mode = outputModeInput.value;
         appTemplateWrap.style.display = mode === "app" ? "block" : "none";
+        wechatWrap.style.display = mode === "wechat" ? "block" : "none";
         submitBtn.textContent = mode === "game"
           ? "开始生成并下载 GAME JSON"
           : mode === "app"
             ? "开始生成并下载 APP ZIP"
-            : "开始编译并下载 ZIP";
+            : mode === "wechat"
+              ? "开始生成微信公众号草稿"
+              : "开始编译并下载 ZIP";
       }
 
       refreshButtonText();
@@ -238,21 +270,28 @@
             throw new Error(errText);
           }
 
-          const blob = await resp.blob();
-          const filename = parseFilenameFromDisposition(resp.headers.get("content-disposition"));
-          const dlUrl = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = dlUrl;
-          a.download = filename;
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          URL.revokeObjectURL(dlUrl);
-          statusBox.textContent = outputMode === "game"
-            ? "生成成功，GAME JSON 已开始下载。"
-            : outputMode === "app"
-              ? "生成成功，APP ZIP 已开始下载。"
-              : "编译成功，ZIP 已开始下载。";
+          if (outputMode === "wechat") {
+            const data = await resp.json();
+            statusBox.textContent = data && data.ok
+              ? `创建成功：draftMediaId=${data.draftMediaId}${data.publishId ? `，publishId=${data.publishId}` : ""}`
+              : "创建成功，但返回内容异常。";
+          } else {
+            const blob = await resp.blob();
+            const filename = parseFilenameFromDisposition(resp.headers.get("content-disposition"));
+            const dlUrl = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = dlUrl;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(dlUrl);
+            statusBox.textContent = outputMode === "game"
+              ? "生成成功，GAME JSON 已开始下载。"
+              : outputMode === "app"
+                ? "生成成功，APP ZIP 已开始下载。"
+                : "编译成功，ZIP 已开始下载。";
+          }
         } catch (err) {
           statusBox.textContent = `编译失败: ${err.message}`;
         } finally {
